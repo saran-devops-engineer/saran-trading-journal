@@ -151,6 +151,19 @@ def get_dhan_token():
         return jsonify({'token': '', 'expires': ''})
 
 
+@app.route('/api/health')
+def health():
+    from database import USE_POSTGRES, DATABASE_URL
+    try:
+        conn = get_connection()
+        conn.execute("SELECT 1")
+        conn.close()
+        db_type = 'postgresql' if USE_POSTGRES else 'sqlite'
+        return jsonify({'status': 'ok', 'database': db_type, 'connected': True})
+    except Exception as e:
+        return jsonify({'status': 'error', 'connected': False, 'error': str(e)}), 500
+
+
 @app.route('/api/settings/test-dhan', methods=['POST'])
 @require_auth
 def test_dhan_connection():
