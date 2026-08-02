@@ -8,13 +8,12 @@ from flask_cors import CORS
 from database import get_connection, init_db, row_to_dict, rows_to_list
 from symbols import search_symbols, get_option_chain, get_all_symbols, get_option_expiries
 from fees import calculate_fees
-from auth import (create_user, authenticate_user, create_session, destroy_session, require_auth, validate_session,
+from auth import (init_auth, create_user, authenticate_user, create_session, destroy_session, require_auth, validate_session,
                   save_setting, get_setting, encrypt_value, decrypt_value)
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
-from config import SECRET_KEY
-app.secret_key = SECRET_KEY
 CORS(app, supports_credentials=True, origins=['http://localhost:5000', 'http://127.0.0.1:5000', 'http://192.168.1.39:5000'])
+init_auth(app)
 
 
 def renew_dhan_token():
@@ -83,10 +82,8 @@ def register():
     user_id, error = create_user(username, password)
     if error:
         return jsonify({'error': error}), 400
-    token = create_session(user_id, username)
-    resp = jsonify({'message': 'User created', 'username': username})
-    resp.set_cookie('session_token', token, httponly=True, samesite='Lax', max_age=86400)
-    return resp, 201
+    create_session(user_id, username)
+    return jsonify({'message': 'User created', 'username': username}), 201
 
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -97,27 +94,19 @@ def login():
     user = authenticate_user(username, password)
     if not user:
         return jsonify({'error': 'Invalid username or password'}), 401
-    token = create_session(user['id'], user['username'])
-    resp = jsonify({'message': 'Logged in', 'username': user['username']})
-    resp.set_cookie('session_token', token, httponly=True, samesite='Lax', max_age=86400)
-    return resp
+    create_session(user['id'], user['username'])
+    return jsonify({'message': 'Logged in', 'username': user['username']})
 
 
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
-    token = request.cookies.get('session_token', '')
-    destroy_session(token)
-    resp = jsonify({'message': 'Logged out'})
-    resp.delete_cookie('session_token')
-    return resp
+    destroy_session()
+    return jsonify({'message': 'Logged out'})
 
 
 @app.route('/api/auth/me', methods=['GET'])
 def get_me():
-    token = request.cookies.get('session_token', '')
-    if not token:
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-    sess = validate_session(token)
+    sess = validate_session()
     if not sess:
         return jsonify({'error': 'Not logged in'}), 401
     return jsonify({'username': sess['username']})

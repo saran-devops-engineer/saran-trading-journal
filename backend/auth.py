@@ -7,8 +7,15 @@ from flask import request, jsonify, session
 from config import SECRET_KEY, ENCRYPTION_KEY
 from database import get_connection
 
-SECRET_KEY_BYTES = SECRET_KEY.encode()
-sessions = {}
+app = None
+
+
+def init_auth(flask_app):
+    global app
+    app = flask_app
+    flask_app.secret_key = SECRET_KEY
+    flask_app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    flask_app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
 
 def hash_password(password):
@@ -24,40 +31,30 @@ def verify_password(password, stored):
 
 
 def create_session(user_id, username):
-    token = secrets.token_urlsafe(32)
-    sessions[token] = {
-        'user_id': user_id,
-        'username': username,
-        'created': datetime.now(),
-        'expires': datetime.now() + timedelta(hours=24)
-    }
-    return token
+    session.permanent = True
+    session['user_id'] = user_id
+    session['username'] = username
+    session['logged_in'] = True
+    return 'ok'
 
 
-def destroy_session(token):
-    if token and token in sessions:
-        del sessions[token]
+def destroy_session():
+    session.clear()
 
 
-def validate_session(token):
-    if not token:
-        return None
-    sess = sessions.get(token)
-    if not sess:
-        return None
-    if datetime.now() > sess['expires']:
-        del sessions[token]
-        return None
-    return sess
+def validate_session():
+    if session.get('logged_in'):
+        return {
+            'user_id': session.get('user_id'),
+            'username': session.get('username')
+        }
+    return None
 
 
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not token:
-            token = request.cookies.get('session_token', '')
-        sess = validate_session(token)
+        sess = validate_session()
         if not sess:
             return jsonify({'error': 'Unauthorized'}), 401
         request.current_user = sess
