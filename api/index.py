@@ -8,4 +8,4 @@ os.environ.setdefault('DB_PATH', '/tmp/trades.db')
 os.environ.setdefault('SECRET_KEY', 'vercel-production-secret-key')
 os.environ.setdefault('ENCRYPTION_KEY', 'vercel-production-encryption-key!')
 
-from app import app as application
+from app import app
