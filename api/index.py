@@ -1,15 +1,18 @@
 import sys
 import os
+import traceback
 
-backend_path = os.path.join(os.path.dirname(__file__), '..', 'backend')
-frontend_path = os.path.join(os.path.dirname(__file__), '..', 'frontend')
+backend_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend')
+frontend_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 sys.path.insert(0, backend_path)
 
-os.environ.setdefault('DB_PATH', '/tmp/trades.db')
-os.environ.setdefault('SECRET_KEY', 'vercel-production-secret-key')
-os.environ.setdefault('ENCRYPTION_KEY', 'vercel-production-encryption-key!')
+os.environ['DB_PATH'] = '/tmp/trades.db'
+os.environ.setdefault('SECRET_KEY', 'vercel-secret-key-change-me')
+os.environ.setdefault('ENCRYPTION_KEY', 'vercel-encryption-key-change-me!')
 
-from app import app
-
-app.static_folder = os.path.abspath(frontend_path)
-app.root_path = os.path.abspath(backend_path)
+try:
+    from app import app
+    app.static_folder = os.path.abspath(frontend_path)
+except Exception as e:
+    traceback.print_exc()
+    raise
