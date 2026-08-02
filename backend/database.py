@@ -10,12 +10,17 @@ def get_connection():
     if USE_POSTGRES:
         import psycopg2
         import psycopg2.extras
-        import psycopg2.extensions
+        import urllib.parse
         url = DATABASE_URL
-        if '?sslmode=' not in url:
-            separator = '&' if '?' in url else '?'
-            url = url + separator + 'sslmode=require'
-        conn = psycopg2.connect(url)
+        parsed = urllib.parse.urlparse(url)
+        params = urllib.parse.parse_qs(parsed.query)
+        params.pop('supa', None)
+        clean_query = urllib.parse.urlencode(params, doseq=True)
+        clean_url = urllib.parse.urlunparse(parsed._replace(query=clean_query))
+        if '?sslmode=' not in clean_url and '&sslmode=' not in clean_url:
+            separator = '&' if '?' in clean_url else '?'
+            clean_url = clean_url + separator + 'sslmode=require'
+        conn = psycopg2.connect(clean_url)
         conn.autocommit = False
         conn.cursor_factory = psycopg2.extras.RealDictCursor
         original_execute = conn.execute
