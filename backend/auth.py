@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import request, jsonify, session
 from config import SECRET_KEY, ENCRYPTION_KEY
-from database import get_connection
+from database import get_connection, sql, last_id
 
 app = None
 
@@ -64,21 +64,21 @@ def require_auth(f):
 
 def create_user(username, password):
     conn = get_connection()
-    existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+    existing = conn.execute(sql("SELECT id FROM users WHERE username = ?"), (username,)).fetchone()
     if existing:
         conn.close()
         return None, 'Username already exists'
     pwd_hash = hash_password(password)
-    cursor = conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, pwd_hash))
+    cursor = conn.execute(sql("INSERT INTO users (username, password_hash) VALUES (?, ?)"), (username, pwd_hash))
+    user_id = last_id(cursor)
     conn.commit()
-    user_id = cursor.lastrowid
     conn.close()
     return user_id, None
 
 
 def authenticate_user(username, password):
     conn = get_connection()
-    user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    user = conn.execute(sql("SELECT * FROM users WHERE username = ?"), (username,)).fetchone()
     conn.close()
     if not user:
         return None
@@ -107,17 +107,17 @@ def decrypt_value(encrypted_value):
 
 def save_setting(key, value):
     conn = get_connection()
-    existing = conn.execute("SELECT id FROM settings WHERE key = ?", (key,)).fetchone()
+    existing = conn.execute(sql("SELECT id FROM settings WHERE key = ?"), (key,)).fetchone()
     if existing:
-        conn.execute("UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?", (value, key))
+        conn.execute(sql("UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?"), (value, key))
     else:
-        conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, value))
+        conn.execute(sql("INSERT INTO settings (key, value) VALUES (?, ?)"), (key, value))
     conn.commit()
     conn.close()
 
 
 def get_setting(key, default=None):
     conn = get_connection()
-    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    row = conn.execute(sql("SELECT value FROM settings WHERE key = ?"), (key,)).fetchone()
     conn.close()
     return row['value'] if row else default

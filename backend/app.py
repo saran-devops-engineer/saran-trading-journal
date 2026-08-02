@@ -5,7 +5,7 @@ import json as _json
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
-from database import get_connection, init_db, row_to_dict, rows_to_list
+from database import get_connection, init_db, row_to_dict, rows_to_list, sql, last_id
 from symbols import search_symbols, get_option_chain, get_all_symbols, get_option_expiries
 from fees import calculate_fees
 from auth import (init_auth, create_user, authenticate_user, create_session, destroy_session, require_auth, validate_session,
@@ -295,7 +295,7 @@ def create_trade():
         data.get('entry_time', ''), data.get('exit_time', '')
     ))
     conn.commit()
-    trade = conn.execute("SELECT * FROM trades WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    trade = conn.execute("SELECT * FROM trades WHERE id = ?", (last_id(cursor),)).fetchone()
     conn.close()
     return jsonify(row_to_dict(trade)), 201
 
