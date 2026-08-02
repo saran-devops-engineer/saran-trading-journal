@@ -1,5 +1,8 @@
 import csv
 import io
+import urllib.request
+import json as _json
+from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
 from database import get_connection, init_db, row_to_dict, rows_to_list
@@ -9,8 +12,58 @@ from auth import (create_user, authenticate_user, create_session, destroy_sessio
                   save_setting, get_setting, encrypt_value, decrypt_value)
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
-app.secret_key = 'trading-journal-flask-secret'
+from config import SECRET_KEY
+app.secret_key = SECRET_KEY
 CORS(app, supports_credentials=True, origins=['http://localhost:5000', 'http://127.0.0.1:5000', 'http://192.168.1.39:5000'])
+
+
+def renew_dhan_token():
+    encrypted = get_setting('dhan_access_token')
+    client_id = get_setting('dhan_client_id')
+    if not encrypted or not client_id:
+        return
+    try:
+        token = decrypt_value(encrypted)
+    except Exception:
+        return
+    url = 'https://api.dhan.co/v2/RenewToken'
+    req = urllib.request.Request(url, method='POST', headers={
+        'access-token': token,
+        'dhanClientId': client_id,
+        'Content-Type': 'application/json'
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+            new_token = data.get('accessToken') or data.get('token') or data.get('access_token')
+            if new_token:
+                save_setting('dhan_access_token', encrypt_value(new_token))
+                save_setting('dhan_token_renewed_at', datetime.now().isoformat())
+                print(f'[Auto-Renew] Dhan token renewed at {datetime.now()}')
+            else:
+                print(f'[Auto-Renew] Renewed but no token in response: {data}')
+    except Exception as e:
+        print(f'[Auto-Renew] Failed: {e}')
+
+
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(renew_dhan_token, 'interval', hours=23, id='dhan_renew')
+    scheduler.start()
+    print('[Auto-Renew] Scheduler started - token will renew every 23 hours')
+except Exception as e:
+    print(f'[Auto-Renew] Scheduler failed to start: {e}')
+
+
+@app.before_request
+def auto_renew_on_startup():
+    if not getattr(app, '_token_renewed_on_startup', False):
+        app._token_renewed_on_startup = True
+        try:
+            renew_dhan_token()
+        except Exception:
+            pass
 
 
 @app.before_request
@@ -76,9 +129,11 @@ def get_settings():
     dhan_token = get_setting('dhan_access_token')
     dhan_client_id = get_setting('dhan_client_id')
     has_token = bool(dhan_token)
+    renewed_at = get_setting('dhan_token_renewed_at') or ''
     return jsonify({
         'dhan_client_id': dhan_client_id or '',
-        'has_dhan_token': has_token
+        'has_dhan_token': has_token,
+        'dhan_token_renewed_at': renewed_at
     })
 
 
@@ -105,6 +160,71 @@ def get_dhan_token():
         return jsonify({'token': token[:8] + '...' + token[-4:] if len(token) > 12 else '***', 'expires': ''})
     except:
         return jsonify({'token': '', 'expires': ''})
+
+
+@app.route('/api/settings/test-dhan', methods=['POST'])
+@require_auth
+def test_dhan_connection():
+    encrypted = get_setting('dhan_access_token')
+    client_id = get_setting('dhan_client_id')
+    if not encrypted or not client_id:
+        return jsonify({'ok': False, 'error': 'Save Client ID and Access Token first'}), 400
+    try:
+        token = decrypt_value(encrypted)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Failed to decrypt token'}), 500
+
+    import urllib.request
+    import json as _json
+    today = __import__('datetime').date.today().strftime('%Y-%m-%d')
+    url = f'https://api.dhan.co/v2/trades/{today}/{today}/0'
+    req = urllib.request.Request(url, headers={
+        'access-token': token,
+        'dhanClientId': client_id,
+        'Content-Type': 'application/json'
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+            return jsonify({'ok': True, 'message': 'Connected to Dhan API', 'data': data})
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        return jsonify({'ok': False, 'error': f'HTTP {e.code}: {body[:200]}'}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/settings/renew-dhan', methods=['POST'])
+@require_auth
+def renew_dhan_now():
+    encrypted = get_setting('dhan_access_token')
+    client_id = get_setting('dhan_client_id')
+    if not encrypted or not client_id:
+        return jsonify({'ok': False, 'error': 'Save Client ID and Access Token first'}), 400
+    try:
+        token = decrypt_value(encrypted)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Failed to decrypt token'}), 500
+    url = 'https://api.dhan.co/v2/RenewToken'
+    req = urllib.request.Request(url, method='POST', headers={
+        'access-token': token,
+        'dhanClientId': client_id,
+        'Content-Type': 'application/json'
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+            new_token = data.get('accessToken') or data.get('token') or data.get('access_token')
+            if new_token:
+                save_setting('dhan_access_token', encrypt_value(new_token))
+                save_setting('dhan_token_renewed_at', datetime.now().isoformat())
+                return jsonify({'ok': True, 'message': 'Token renewed'})
+            return jsonify({'ok': False, 'error': f'No token in response: {data}'}), 500
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        return jsonify({'ok': False, 'error': f'HTTP {e.code}: {body[:200]}'}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/')

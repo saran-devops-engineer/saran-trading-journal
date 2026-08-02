@@ -73,6 +73,8 @@ var App = {
 
         document.getElementById('logoutBtn').addEventListener('click', function() { Auth.logout(); });
         document.getElementById('saveDhanSettings').addEventListener('click', function() { App.saveDhanSettings(); });
+        document.getElementById('testDhanConnection').addEventListener('click', function() { App.testDhanConnection(); });
+        document.getElementById('renewDhanNow').addEventListener('click', function() { App.renewDhanNow(); });
 
         document.getElementById('mobileMenuBtn').addEventListener('click', function() {
             document.querySelector('.nav-links').classList.toggle('active');
@@ -155,15 +157,34 @@ var App = {
     loadSettings: async function() {
         try {
             var res = await fetch('/api/settings', { credentials: 'include' });
+            if (res.status === 401) {
+                Auth.showLogin();
+                return;
+            }
             var data = await res.json();
             document.getElementById('dhanClientId').value = data.dhan_client_id || '';
             var statusEl = document.getElementById('dhanTokenStatus');
+            var renewInfo = document.getElementById('dhanRenewInfo');
             if (data.has_dhan_token) {
                 statusEl.textContent = 'Token configured';
                 statusEl.className = 'token-status valid';
             } else {
                 statusEl.textContent = 'No token configured';
                 statusEl.className = 'token-status invalid';
+            }
+            if (data.dhan_token_renewed_at) {
+                var d = new Date(data.dhan_token_renewed_at);
+                var hoursAgo = Math.round((Date.now() - d.getTime()) / 3600000);
+                renewInfo.textContent = 'Last renewed: ' + d.toLocaleString() + ' (' + hoursAgo + 'h ago)';
+                if (hoursAgo >= 24) {
+                    renewInfo.textContent += ' - Token may be expired, click Test Connection to check';
+                    renewInfo.style.color = '#f87171';
+                } else {
+                    renewInfo.style.color = '#888';
+                }
+            } else {
+                renewInfo.textContent = 'Auto-renewal runs every 23 hours';
+                renewInfo.style.color = '#888';
             }
         } catch (err) {
             console.error('Failed to load settings');
@@ -177,6 +198,11 @@ var App = {
         if (clientId) data.dhan_client_id = clientId;
         if (token) data.dhan_access_token = token;
 
+        if (Object.keys(data).length === 0) {
+            alert('Enter Client ID or Access Token first');
+            return;
+        }
+
         try {
             var res = await fetch('/api/settings', {
                 method: 'POST',
@@ -184,13 +210,69 @@ var App = {
                 credentials: 'include',
                 body: JSON.stringify(data)
             });
+            var result = await res.json();
             if (res.ok) {
                 document.getElementById('dhanToken').value = '';
                 App.loadSettings();
                 alert('Settings saved');
+            } else if (res.status === 401) {
+                Auth.showLogin();
+            } else {
+                alert(result.error || 'Failed to save settings');
             }
         } catch (err) {
-            alert('Failed to save settings');
+            alert('Failed to save settings - is the server running?');
+        }
+    },
+
+    testDhanConnection: async function() {
+        var resultEl = document.getElementById('dhanTestResult');
+        resultEl.textContent = 'Testing...';
+        resultEl.style.color = '#aaa';
+        try {
+            var res = await fetch('/api/settings/test-dhan', {
+                method: 'POST',
+                credentials: 'include'
+            });
+            var data = await res.json();
+            if (data.ok) {
+                resultEl.textContent = 'Connected';
+                resultEl.style.color = '#4ade80';
+            } else {
+                var msg = data.error || 'Connection failed';
+                if (msg.indexOf('expired') !== -1 || msg.indexOf('Invalid') !== -1) {
+                    msg += ' - Generate new token from Dhan website and save it here';
+                }
+                resultEl.textContent = msg;
+                resultEl.style.color = '#f87171';
+            }
+        } catch (err) {
+            resultEl.textContent = 'Server unreachable';
+            resultEl.style.color = '#f87171';
+        }
+    },
+
+    renewDhanNow: async function() {
+        var resultEl = document.getElementById('dhanTestResult');
+        resultEl.textContent = 'Renewing token...';
+        resultEl.style.color = '#aaa';
+        try {
+            var res = await fetch('/api/settings/renew-dhan', {
+                method: 'POST',
+                credentials: 'include'
+            });
+            var data = await res.json();
+            if (data.ok) {
+                resultEl.textContent = 'Token renewed successfully';
+                resultEl.style.color = '#4ade80';
+                App.loadSettings();
+            } else {
+                resultEl.textContent = data.error || 'Renewal failed';
+                resultEl.style.color = '#f87171';
+            }
+        } catch (err) {
+            resultEl.textContent = 'Server unreachable';
+            resultEl.style.color = '#f87171';
         }
     }
 };

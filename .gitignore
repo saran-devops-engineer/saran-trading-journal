@@ -3,9 +3,11 @@ __pycache__/
 *.pyo
 *.db
 .env
+.env.production
 venv/
 .venv/
 node_modules/
 .DS_Store
 Thumbs.db
 *.log
+data/

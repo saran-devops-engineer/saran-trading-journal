@@ -284,7 +284,13 @@
                         <span class="settings-hint">Generate from Dhan Web → My Profile → Access DhanHQ APIs</span>
                     </div>
                     <div class="dhan-token-status" id="dhanTokenStatus"></div>
-                    <button class="btn btn-primary" id="saveDhanSettings">Save Settings</button>
+                    <div id="dhanRenewInfo" style="font-size:0.75rem;color:#888;margin-bottom:0.5rem"></div>
+                    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                        <button class="btn btn-primary" id="saveDhanSettings">Save Settings</button>
+                        <button class="btn btn-secondary" id="testDhanConnection" style="background:#2563eb;color:#fff;border:none;padding:0.5rem 1rem;border-radius:6px;cursor:pointer">Test Connection</button>
+                        <button class="btn btn-secondary" id="renewDhanNow" style="background:#7c3aed;color:#fff;border:none;padding:0.5rem 1rem;border-radius:6px;cursor:pointer">Renew Now</button>
+                    </div>
+                    <div id="dhanTestResult" style="margin-top:0.75rem;font-size:0.85rem"></div>
                 </div>
             </div>
         </div>
@@ -476,14 +482,14 @@
         <button class="btn btn-ghost btn-sm" id="installDismiss">Dismiss</button>
     </div>
 
-    <script src="/js/stats.js?v=4"></script>
-    <script src="/js/trades.js?v=4"></script>
-    <script src="/js/charts.js?v=4"></script>
-    <script src="/js/symbols.js?v=4"></script>
-    <script src="/js/fees.js?v=4"></script>
-    <script src="/js/analytics.js?v=4"></script>
+    <script src="/js/stats.js?v=5"></script>
+    <script src="/js/trades.js?v=5"></script>
+    <script src="/js/charts.js?v=5"></script>
+    <script src="/js/symbols.js?v=5"></script>
+    <script src="/js/fees.js?v=5"></script>
+    <script src="/js/analytics.js?v=5"></script>
     <script src="/js/auth.js?v=5"></script>
-    <script src="/js/app.js?v=4"></script>
+    <script src="/js/app.js?v=5"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() { Auth.init(); });
     </script>
