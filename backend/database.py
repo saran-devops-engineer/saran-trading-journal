@@ -10,7 +10,13 @@ def get_connection():
     if USE_POSTGRES:
         import psycopg2
         import psycopg2.extras
-        conn = psycopg2.connect(DATABASE_URL)
+        import psycopg2.extensions
+        url = DATABASE_URL
+        if '?sslmode=' not in url:
+            separator = '&' if '?' in url else '?'
+            url = url + separator + 'sslmode=require'
+        conn = psycopg2.connect(url)
+        conn.autocommit = False
         conn.cursor_factory = psycopg2.extras.RealDictCursor
         original_execute = conn.execute
         def patched_execute(query, params=None):
